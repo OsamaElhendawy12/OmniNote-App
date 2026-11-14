@@ -25,9 +25,6 @@ jobs:
         with:
           gradle-version: '8.7'
 
-      - name: Make Gradle Wrapper Executable
-        run: chmod +x gradlew
-
       - name: Move Flat Uploaded Files Into Android Folders Automatically
         run: |
           mkdir -p app/src/main/java/com/omninote/study
@@ -43,6 +40,11 @@ jobs:
             printf 'plugins {\n    id("com.android.application") version "8.4.1" apply false\n    id("org.jetbrains.kotlin.android") version "1.9.24" apply false\n}\n' > build.gradle.kts
           fi
 
+      - name: Generate Gradle Wrapper Files On-the-Fly
+        run: |
+          gradle wrapper --gradle-version 8.7
+          chmod +x gradlew
+
       - name: Generate Fixed Debug Keystore for Seamless APK Updates
         run: |
           if [ ! -f app/debug.keystore ]; then
@@ -53,22 +55,13 @@ jobs:
           fi
 
       - name: Build Debug APK with Wrapper
-        run: ./gradlew :app:assembleDebug --stacktrace --info
+        run: ./gradlew :app:assembleDebug --stacktrace
 
       - name: Upload Installable APK
         uses: actions/upload-artifact@v4
         with:
           name: OmniNote-Studio-APK
           path: app/build/outputs/apk/debug/app-debug.apk
-
-      - name: Capture Build Errors and Diagnostics (On Failure)
-        if: failure()
-        run: |
-          echo "=========================================="
-          echo "BUILD FAILED - COLLECTING DIAGNOSTICS"
-          echo "=========================================="
-          find app/build -name "*.log" -o -name "report.xml" || true
-          cat ~/.gradle/daemon/*/daemon-*.out || true
 
       - name: Upload Build Reports & Error Logs (On Failure)
         uses: actions/upload-artifact@v4
