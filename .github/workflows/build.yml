@@ -28,12 +28,54 @@ jobs:
       - name: Make Gradle Wrapper Executable
         run: chmod +x gradlew
 
+      - name: Move Flat Uploaded Files Into Android Folders Automatically
+        run: |
+          mkdir -p app/src/main/java/com/omninote/study
+          for f in NoteModels.kt StorageAndPdfManager.kt GeometryHelper.kt MainActivity.kt; do
+            if [ -f "$f" ]; then mv "$f" app/src/main/java/com/omninote/study/; fi
+          done
+          if [ -f "AndroidManifest.xml" ]; then mv "AndroidManifest.xml" app/src/main/; fi
+
+      - name: Ensure Root and App Gradle Files Match
+        run: |
+          if grep -q "com.omninote.study" build.gradle.kts; then
+            cp build.gradle.kts app/build.gradle.kts
+            printf 'plugins {\n    id("com.android.application") version "8.4.1" apply false\n    id("org.jetbrains.kotlin.android") version "1.9.24" apply false\n}\n' > build.gradle.kts
+          fi
+
+      - name: Generate Fixed Debug Keystore for Seamless APK Updates
+        run: |
+          if [ ! -f app/debug.keystore ]; then
+            keytool -genkey -v -keystore app/debug.keystore \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
       - name: Build Debug APK with Wrapper
-        run: ./gradlew :app:assembleDebug --stacktrace
+        run: ./gradlew :app:assembleDebug --stacktrace --info
 
       - name: Upload Installable APK
         uses: actions/upload-artifact@v4
         with:
           name: OmniNote-Studio-APK
           path: app/build/outputs/apk/debug/app-debug.apk
-          
+
+      - name: Capture Build Errors and Diagnostics (On Failure)
+        if: failure()
+        run: |
+          echo "=========================================="
+          echo "BUILD FAILED - COLLECTING DIAGNOSTICS"
+          echo "=========================================="
+          find app/build -name "*.log" -o -name "report.xml" || true
+          cat ~/.gradle/daemon/*/daemon-*.out || true
+
+      - name: Upload Build Reports & Error Logs (On Failure)
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: omninote-build-error-logs
+          path: |
+            app/build/reports/
+            **/build/outputs/logs/
+            
